@@ -17,6 +17,7 @@ import { ClientImageProcessor } from '@/lib/client-image-processor'
 import DragDropUpload from '@/components/drag-drop-upload'
 import CropControls from '@/components/crop-controls'
 import ExportDialog from '@/components/export-dialog'
+import ShareButton from '@/components/share-button'
 import { useToast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -3304,7 +3305,7 @@ export default function MiniAdobe() {
             </div>
             <Badge variant="secondary" className="gap-1">
               <Brain className="h-3 w-3" />
-              Clipdrop AI
+              AI Powered
             </Badge>
             <Badge variant="outline" className="text-xs">
               Ctrl+Z: Undo | Ctrl+S: Export | B: Brush | E: Eraser | C: Crop | S: Shape
@@ -3324,6 +3325,7 @@ export default function MiniAdobe() {
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
+            <ShareButton imageData={selectedImage} />
           </div>
         </div>
       </header>
@@ -3635,7 +3637,7 @@ export default function MiniAdobe() {
                           </div>
                           <div>
                             <h3 className="font-semibold text-sm">AI Processing</h3>
-                            <p className="text-xs text-muted-foreground">Clipdrop AI is working...</p>
+                            <p className="text-xs text-muted-foreground">AI is working...</p>
                           </div>
                         </div>
                         <div className="mt-4">
@@ -3986,7 +3988,7 @@ export default function MiniAdobe() {
                           </p>
                         </div>
                         <p className="text-gray-400 text-sm">
-                          Tip: You can also use the Text tool to create text directly on the canvas
+                          💡 Tip: You can also use the Text tool to create text directly on the canvas
                         </p>
                       </div>
                     </div>
@@ -5174,7 +5176,7 @@ export default function MiniAdobe() {
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Brain className="h-4 w-4" />
-                    Clipdrop AI-Powered Features
+                    AI-Powered Features
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -5203,7 +5205,7 @@ export default function MiniAdobe() {
                   <Separator />
                   
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Enhance Resolution (Clipdrop AI)</Label>
+                    <Label className="text-sm font-medium">Enhance Resolution</Label>
                     <Button 
                       variant="outline" 
                       className="w-full"
