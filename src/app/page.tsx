@@ -174,6 +174,10 @@ export default function MiniAdobe() {
     { id: '5:4', name: '5:4', ratio: 5/4 }
   ])
   const [rotation, setRotation] = useState([0])
+  
+  // Histogram state
+  const [histogramData, setHistogramData] = useState<number[]>(new Array(256).fill(0))
+  const [showHistogram, setShowHistogram] = useState(true)
   const [flipHorizontal, setFlipHorizontal] = useState(false)
   const [flipVertical, setFlipVertical] = useState(false)
   const [showTransparencyGrid, setShowTransparencyGrid] = useState(true)
@@ -1251,6 +1255,15 @@ export default function MiniAdobe() {
         return
       }
       
+      // Handle H key to toggle histogram
+      if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Only toggle histogram if not in text input mode
+        const activeElement = document.activeElement
+        if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+          setShowHistogram(prev => !prev)
+        }
+      }
+      
       // Handle Enter key to apply crop
       if (e.key === 'Enter' && cropMode) {
         applyCrop()
@@ -1305,7 +1318,7 @@ export default function MiniAdobe() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, cropMode, cancelCrop, applyCrop, isAddingText, applyText, cancelText, selectedImage, showExportDialog, showTextToImageDialog, handleExport])
+  }, [undo, redo, cropMode, cancelCrop, applyCrop, isAddingText, applyText, cancelText, selectedImage, showExportDialog, showTextToImageDialog, handleExport, showHistogram])
 
   const handleFileUpload = useCallback((file: File) => {
     // Validate file type
@@ -1564,6 +1577,45 @@ export default function MiniAdobe() {
     img.src = selectedImage
   }, [selectedImage, brightness, contrast, saturation, hue, blur, highlights, shadows, vignette, vignetteSize, vignetteFeather, historyIndex, layers, selectedLayer, redrawCanvas])
 
+  // Calculate histogram from image data
+  const calculateHistogram = useCallback((imageData: ImageData) => {
+    const histogram = new Array(256).fill(0)
+    const data = imageData.data
+    
+    for (let i = 0; i < data.length; i += 4) {
+      // Calculate luminance (brightness) value
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      const luminance = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
+      histogram[luminance]++
+    }
+    
+    // Normalize histogram values for display
+    const maxValue = Math.max(...histogram)
+    if (maxValue > 0) {
+      return histogram.map(value => (value / maxValue) * 100)
+    }
+    return histogram
+  }, [])
+
+  // Update histogram when image or adjustments change
+  const updateHistogram = useCallback(() => {
+    if (!canvasRef.current) return
+    
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const histogram = calculateHistogram(imageData)
+      setHistogramData(histogram)
+    } catch (error) {
+      console.error('Error calculating histogram:', error)
+    }
+  }, [calculateHistogram])
+
   // Real-time adjustments function
   const applyRealTimeAdjustments = useCallback(() => {
     if (!canvasRef.current || !selectedImage) return
@@ -1610,9 +1662,12 @@ export default function MiniAdobe() {
       
       // Reset filter
       ctx.filter = 'none'
+      
+      // Update histogram after all adjustments
+      updateHistogram()
     }
     img.src = selectedImage
-  }, [selectedImage, brightness, contrast, saturation, hue, blur, highlights, shadows, vignette, vignetteSize, vignetteFeather])
+  }, [selectedImage, brightness, contrast, saturation, hue, blur, highlights, shadows, vignette, vignetteSize, vignetteFeather, updateHistogram])
 
   // Reset adjustments function
   const resetAdjustments = useCallback(() => {
@@ -1793,7 +1848,7 @@ export default function MiniAdobe() {
     try {
       // Show real-time feedback
       toast({
-        title: "AI Processing",
+        title: "🤖 AI Processing",
         description: "Enhancing resolution 2x with Clipdrop AI...",
       })
       
@@ -1954,6 +2009,16 @@ export default function MiniAdobe() {
       applyRealTimeAdjustments()
     }
   }, [brightness, contrast, saturation, hue, blur, selectedImage, applyRealTimeAdjustments, isUploading])
+
+  // Update histogram when image loads
+  useEffect(() => {
+    if (selectedImage) {
+      // Small delay to ensure canvas is ready
+      setTimeout(() => {
+        updateHistogram()
+      }, 100)
+    }
+  }, [selectedImage, updateHistogram])
 
   // Debounced save to history when adjustments stop changing
   useEffect(() => {
@@ -3239,7 +3304,7 @@ export default function MiniAdobe() {
             </div>
             <Badge variant="secondary" className="gap-1">
               <Brain className="h-3 w-3" />
-              AI Powered
+              Clipdrop AI
             </Badge>
             <Badge variant="outline" className="text-xs">
               Ctrl+Z: Undo | Ctrl+S: Export | B: Brush | E: Eraser | C: Crop | S: Shape
@@ -3570,7 +3635,7 @@ export default function MiniAdobe() {
                           </div>
                           <div>
                             <h3 className="font-semibold text-sm">AI Processing</h3>
-                            <p className="text-xs text-muted-foreground">AI is working...</p>
+                            <p className="text-xs text-muted-foreground">Clipdrop AI is working...</p>
                           </div>
                         </div>
                         <div className="mt-4">
@@ -3892,7 +3957,7 @@ export default function MiniAdobe() {
                   
                   {/* Show upload prompt when no image is loaded and not using text tool */}
                   {!selectedImage && selectedTool !== 'text' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90 sizeupload">
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
                       <div className="text-center max-w-md mx-4">
                         <div className={`mb-6 p-8 border-2 border-dashed rounded-lg transition-colors ${
                           isCanvasDragging 
@@ -3921,7 +3986,7 @@ export default function MiniAdobe() {
                           </p>
                         </div>
                         <p className="text-gray-400 text-sm">
-                          💡 Tip: You can also use the Text tool to create text directly on the canvas
+                          Tip: You can also use the Text tool to create text directly on the canvas
                         </p>
                       </div>
                     </div>
@@ -3945,12 +4010,15 @@ export default function MiniAdobe() {
               <Button 
                 variant={activeTab === 'basic' ? 'default' : 'ghost'} 
                 size="sm" 
-                className="w-full h-12 flex-col"
+                className="w-full h-12 flex-col relative"
                 onClick={() => setActiveTab('basic')}
                 title="Basic"
               >
                 <Sliders className="h-5 w-5" />
                 <span className="text-xs">Basic</span>
+                {showHistogram && (
+                  <div className="w-1 h-1 bg-primary rounded-full absolute top-2 right-2"></div>
+                )}
               </Button>
               <Button 
                 variant={activeTab === 'enhancement' ? 'default' : 'ghost'} 
@@ -4261,6 +4329,86 @@ export default function MiniAdobe() {
                   onApplyCrop={applyCrop}
                   onCancelCrop={cancelCrop}
                 />
+              )}
+
+              {/* Histogram */}
+              {showHistogram && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Activity className="h-4 w-4" />
+                        Histogram
+                        <span className="text-xs text-muted-foreground">(H)</span>
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowHistogram(!showHistogram)}
+                        className="h-6 w-6 p-0"
+                        title="Toggle Histogram"
+                      >
+                        {showHistogram ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Shadows</span>
+                        <span>Midtones</span>
+                        <span>Highlights</span>
+                      </div>
+                      <div className="relative h-32 w-full bg-muted rounded-md overflow-hidden">
+                        <svg
+                          width="100%"
+                          height="100%"
+                          className="absolute inset-0"
+                          preserveAspectRatio="none"
+                        >
+                          {/* Grid lines */}
+                          <defs>
+                            <pattern
+                              id="grid"
+                              width="25.6"
+                              height="32"
+                              patternUnits="userSpaceOnUse"
+                            >
+                              <path
+                                d="M 25.6 0 L 0 0 0 32"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="0.5"
+                                className="text-muted-foreground/20"
+                              />
+                            </pattern>
+                          </defs>
+                          <rect width="100%" height="100%" fill="url(#grid)" />
+                          
+                          {/* Histogram bars */}
+                          {histogramData.map((value, index) => (
+                            <rect
+                              key={index}
+                              x={`${(index / 256) * 100}%`}
+                              y={`${100 - value}%`}
+                              width={`${100 / 256}%`}
+                              height={`${value}%`}
+                              className="fill-primary"
+                              opacity={0.8}
+                            />
+                          ))}
+                        </svg>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>0</span>
+                        <span>64</span>
+                        <span>128</span>
+                        <span>192</span>
+                        <span>255</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               <Card>
@@ -5026,7 +5174,7 @@ export default function MiniAdobe() {
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Brain className="h-4 w-4" />
-                      AI-Powered Features
+                    Clipdrop AI-Powered Features
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -5055,7 +5203,7 @@ export default function MiniAdobe() {
                   <Separator />
                   
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Enhance Resolution</Label>
+                    <Label className="text-sm font-medium">Enhance Resolution (Clipdrop AI)</Label>
                     <Button 
                       variant="outline" 
                       className="w-full"

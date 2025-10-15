@@ -1279,74 +1279,133 @@ export class ImageProcessor {
   }
 
   /**
-   * 1D Discrete Fourier Transform (DFT)
+   * Fast Fourier Transform (FFT) implementation for 1D signals
+   * Uses recursive Cooley-Tukey algorithm - O(N log N) complexity
    */
-  static dft1d(signal: number[]): Complex[] {
+  static fft1d(signal: number[]): Complex[] {
     const N = signal.length
-    const result: Complex[] = []
     
-    for (let k = 0; k < N; k++) {
-      let real = 0
-      let imag = 0
+    // Base case: if signal length is 1, return as complex number
+    if (N === 1) {
+      return [{ real: signal[0], imag: 0 }]
+    }
+    
+    // Check if N is power of 2, if not pad with zeros
+    let paddedSignal = signal
+    let paddedN = N
+    if ((N & (N - 1)) !== 0) {
+      // Find next power of 2
+      paddedN = Math.pow(2, Math.ceil(Math.log2(N)))
+      paddedSignal = new Array(paddedN).fill(0)
+      for (let i = 0; i < N; i++) {
+        paddedSignal[i] = signal[i]
+      }
+    }
+    
+    // Divide signal into even and odd indexed elements
+    const even: number[] = []
+    const odd: number[] = []
+    
+    for (let i = 0; i < paddedN; i++) {
+      if (i % 2 === 0) {
+        even.push(paddedSignal[i])
+      } else {
+        odd.push(paddedSignal[i])
+      }
+    }
+    
+    // Recursively compute FFT of even and odd parts
+    const evenFFT = this.fft1d(even)
+    const oddFFT = this.fft1d(odd)
+    
+    // Combine results
+    const result: Complex[] = new Array(paddedN)
+    const halfN = paddedN / 2
+    
+    for (let k = 0; k < halfN; k++) {
+      const angle = -2 * Math.PI * k / paddedN
+      const wReal = Math.cos(angle)
+      const wImag = Math.sin(angle)
       
-      for (let n = 0; n < N; n++) {
-        const angle = -2 * Math.PI * k * n / N
-        real += signal[n] * Math.cos(angle)
-        imag += signal[n] * Math.sin(angle)
+      const oddReal = oddFFT[k].real * wReal - oddFFT[k].imag * wImag
+      const oddImag = oddFFT[k].real * wImag + oddFFT[k].imag * wReal
+      
+      result[k] = {
+        real: evenFFT[k].real + oddReal,
+        imag: evenFFT[k].imag + oddImag
       }
       
-      result.push({ real, imag })
+      result[k + halfN] = {
+        real: evenFFT[k].real - oddReal,
+        imag: evenFFT[k].imag - oddImag
+      }
+    }
+    
+    // Trim to original length if padding was used
+    if (paddedN > N) {
+      return result.slice(0, N)
     }
     
     return result
   }
 
   /**
-   * 1D Inverse Discrete Fourier Transform
+   * Inverse Fast Fourier Transform (IFFT) for 1D signals
    */
-  static idft1d(spectrum: Complex[]): number[] {
+  static ifft1d(spectrum: Complex[]): number[] {
     const N = spectrum.length
-    const result: number[] = []
     
-    for (let n = 0; n < N; n++) {
-      let real = 0
-      
-      for (let k = 0; k < N; k++) {
-        const angle = 2 * Math.PI * k * n / N
-        real += spectrum[k].real * Math.cos(angle) - spectrum[k].imag * Math.sin(angle)
-      }
-      
-      result.push(real / N)
+    // Conjugate the input spectrum
+    const conjugated: Complex[] = []
+    for (let i = 0; i < N; i++) {
+      conjugated.push({
+        real: spectrum[i].real,
+        imag: -spectrum[i].imag
+      })
+    }
+    
+    // Extract real parts and apply FFT
+    const realParts = conjugated.map(c => c.real)
+    const imagParts = conjugated.map(c => c.imag)
+    
+    const fftReal = this.fft1d(realParts)
+    const fftImag = this.fft1d(imagParts)
+    
+    // Conjugate again and divide by N
+    const result: number[] = []
+    for (let i = 0; i < N; i++) {
+      result.push(fftReal[i].real / N)
     }
     
     return result
   }
 
   /**
-   * 2D Discrete Fourier Transform using row-column approach
+   * 2D Fast Fourier Transform using separable approach
+   * Applies 1D FFT to rows, then to columns
    */
   static fft2d(matrix: number[][]): Complex[][] {
     const height = matrix.length
     const width = matrix[0].length
     
-    // Apply 1D DFT to each row
+    // Apply 1D FFT to each row
     const rowTransformed: Complex[][] = []
     for (let y = 0; y < height; y++) {
-      rowTransformed[y] = this.dft1d(matrix[y])
+      rowTransformed[y] = this.fft1d(matrix[y])
     }
     
-    // Apply 1D DFT to each column of the row-transformed matrix
+    // Apply 1D FFT to each column
     const result: Complex[][] = []
     for (let x = 0; x < width; x++) {
       const column: number[] = []
       for (let y = 0; y < height; y++) {
         column.push(rowTransformed[y][x].real)
       }
-      const columnTransformed = this.dft1d(column)
+      const columnFFT = this.fft1d(column)
       
       for (let y = 0; y < height; y++) {
         if (!result[y]) result[y] = []
-        result[y][x] = columnTransformed[y]
+        result[y][x] = columnFFT[y]
       }
     }
     
@@ -1354,30 +1413,30 @@ export class ImageProcessor {
   }
 
   /**
-   * 2D Inverse Discrete Fourier Transform
+   * 2D Inverse Fast Fourier Transform
    */
   static ifft2d(spectrum: Complex[][]): number[][] {
     const height = spectrum.length
     const width = spectrum[0].length
     
-    // Apply 1D IDFT to each row
+    // Apply 1D IFFT to each row
     const rowTransformed: number[][] = []
     for (let y = 0; y < height; y++) {
-      rowTransformed[y] = this.idft1d(spectrum[y])
+      rowTransformed[y] = this.ifft1d(spectrum[y])
     }
     
-    // Apply 1D IDFT to each column
+    // Apply 1D IFFT to each column
     const result: number[][] = []
     for (let x = 0; x < width; x++) {
       const column: Complex[] = []
       for (let y = 0; y < height; y++) {
         column.push({ real: rowTransformed[y][x], imag: 0 })
       }
-      const columnTransformed = this.idft1d(column)
+      const columnIFFT = this.ifft1d(column)
       
       for (let y = 0; y < height; y++) {
         if (!result[y]) result[y] = []
-        result[y][x] = columnTransformed[y]
+        result[y][x] = columnIFFT[y]
       }
     }
     
@@ -1456,12 +1515,15 @@ export class ImageProcessor {
    * Create ideal high-pass filter mask
    */
   static createIdealHighPassFilter(width: number, height: number, cutoff: number): number[][] {
-    const filter = this.createIdealLowPassFilter(width, height, cutoff)
+    const centerX = Math.floor(width / 2)
+    const centerY = Math.floor(height / 2)
+    const filter: number[][] = []
     
-    // Invert the low-pass filter
-    for (let y = 0; y < filter.length; y++) {
-      for (let x = 0; x < filter[0].length; x++) {
-        filter[y][x] = filter[y][x] === 0 ? 1 : 0
+    for (let y = 0; y < height; y++) {
+      filter[y] = []
+      for (let x = 0; x < width; x++) {
+        const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2))
+        filter[y][x] = distance > cutoff ? 1 : 0
       }
     }
     
@@ -1475,7 +1537,7 @@ export class ImageProcessor {
     const centerX = Math.floor(width / 2)
     const centerY = Math.floor(height / 2)
     const filter: number[][] = []
-    const sigma = cutoff / 3 // Standard deviation
+    const sigma = cutoff / 2.0 // Better standard deviation for smoother transition
     
     for (let y = 0; y < height; y++) {
       filter[y] = []
@@ -1492,13 +1554,17 @@ export class ImageProcessor {
    * Create Gaussian high-pass filter mask
    */
   static createGaussianHighPassFilter(width: number, height: number, cutoff: number): number[][] {
-    const lowPass = this.createGaussianLowPassFilter(width, height, cutoff)
+    const centerX = Math.floor(width / 2)
+    const centerY = Math.floor(height / 2)
     const filter: number[][] = []
+    const sigma = cutoff / 2.0 // Better standard deviation
     
-    for (let y = 0; y < lowPass.length; y++) {
+    for (let y = 0; y < height; y++) {
       filter[y] = []
-      for (let x = 0; x < lowPass[0].length; x++) {
-        filter[y][x] = 1 - lowPass[y][x]
+      for (let x = 0; x < width; x++) {
+        const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2))
+        const gaussian = Math.exp(-(distance * distance) / (2 * sigma * sigma))
+        filter[y][x] = 1 - gaussian
       }
     }
     
@@ -1614,8 +1680,10 @@ export class ImageProcessor {
 
   /**
    * Ideal Low-Pass Filter
+   * Preserves low frequencies while blocking high frequencies
+   * Effect: Smooths the image and reduces fine detail and noise
    */
-  static applyIdealLowPass(imageData: ImageData, cutoff: number): ImageData {
+  static applyIdealLowPass(imageData: ImageData, cutoff: number = 50): ImageData {
     const matrix = this.imageToMatrix(imageData)
     const filter = this.createIdealLowPassFilter(matrix[0].length, matrix.length, cutoff)
     return this.applyFrequencyFilter(imageData, filter)
@@ -1623,8 +1691,10 @@ export class ImageProcessor {
 
   /**
    * Ideal High-Pass Filter
+   * Preserves high frequencies while blocking low frequencies
+   * Effect: Sharpens the image by enhancing edge and line detail
    */
-  static applyIdealHighPass(imageData: ImageData, cutoff: number): ImageData {
+  static applyIdealHighPass(imageData: ImageData, cutoff: number = 30): ImageData {
     const matrix = this.imageToMatrix(imageData)
     const filter = this.createIdealHighPassFilter(matrix[0].length, matrix.length, cutoff)
     return this.applyFrequencyFilter(imageData, filter)
@@ -1632,8 +1702,10 @@ export class ImageProcessor {
 
   /**
    * Gaussian Low-Pass Filter
+   * Uses Gaussian function for smooth frequency transition
+   * Effect: Gentle smoothing with reduced ringing artifacts
    */
-  static applyGaussianLowPass(imageData: ImageData, cutoff: number): ImageData {
+  static applyGaussianLowPass(imageData: ImageData, cutoff: number = 50): ImageData {
     const matrix = this.imageToMatrix(imageData)
     const filter = this.createGaussianLowPassFilter(matrix[0].length, matrix.length, cutoff)
     return this.applyFrequencyFilter(imageData, filter)
@@ -1641,8 +1713,10 @@ export class ImageProcessor {
 
   /**
    * Gaussian High-Pass Filter
+   * High-pass version with smooth transition
+   * Effect: Enhanced edges with reduced artifacts
    */
-  static applyGaussianHighPass(imageData: ImageData, cutoff: number): ImageData {
+  static applyGaussianHighPass(imageData: ImageData, cutoff: number = 30): ImageData {
     const matrix = this.imageToMatrix(imageData)
     const filter = this.createGaussianHighPassFilter(matrix[0].length, matrix.length, cutoff)
     return this.applyFrequencyFilter(imageData, filter)
@@ -1650,8 +1724,10 @@ export class ImageProcessor {
 
   /**
    * Butterworth Low-Pass Filter
+   * Provides smooth transition with adjustable order
+   * Effect: Controlled smoothing with tunable sharpness
    */
-  static applyButterworthLowPass(imageData: ImageData, cutoff: number, order: number = 2): ImageData {
+  static applyButterworthLowPass(imageData: ImageData, cutoff: number = 50, order: number = 2): ImageData {
     const matrix = this.imageToMatrix(imageData)
     const filter = this.createButterworthLowPassFilter(matrix[0].length, matrix.length, cutoff, order)
     return this.applyFrequencyFilter(imageData, filter)
@@ -1659,8 +1735,10 @@ export class ImageProcessor {
 
   /**
    * Butterworth High-Pass Filter
+   * High-pass version with smooth transition and adjustable order
+   * Effect: Enhanced edges with controlled sharpness
    */
-  static applyButterworthHighPass(imageData: ImageData, cutoff: number, order: number = 2): ImageData {
+  static applyButterworthHighPass(imageData: ImageData, cutoff: number = 30, order: number = 2): ImageData {
     const matrix = this.imageToMatrix(imageData)
     const filter = this.createButterworthHighPassFilter(matrix[0].length, matrix.length, cutoff, order)
     return this.applyFrequencyFilter(imageData, filter)
@@ -1845,7 +1923,7 @@ export const FREQUENCY_DOMAIN_FILTERS = [
   },
   {
     name: 'Ideal Low-Pass',
-    apply: (imageData) => ImageProcessor.applyIdealLowPass(imageData, 30)
+    apply: (imageData) => ImageProcessor.applyIdealLowPass(imageData, 50)
   },
   {
     name: 'Ideal High-Pass',
@@ -1853,7 +1931,7 @@ export const FREQUENCY_DOMAIN_FILTERS = [
   },
   {
     name: 'Gaussian Low-Pass',
-    apply: (imageData) => ImageProcessor.applyGaussianLowPass(imageData, 30)
+    apply: (imageData) => ImageProcessor.applyGaussianLowPass(imageData, 50)
   },
   {
     name: 'Gaussian High-Pass',
@@ -1861,7 +1939,7 @@ export const FREQUENCY_DOMAIN_FILTERS = [
   },
   {
     name: 'Butterworth Low-Pass',
-    apply: (imageData) => ImageProcessor.applyButterworthLowPass(imageData, 30, 2)
+    apply: (imageData) => ImageProcessor.applyButterworthLowPass(imageData, 50, 2)
   },
   {
     name: 'Butterworth High-Pass',
