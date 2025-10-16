@@ -3528,7 +3528,7 @@ export default function MiniAdobe() {
               </div>
               
               <div className="flex items-center gap-2">
-                <Button 
+                {/* <Button 
                   variant={showTransparencyGrid ? 'default' : 'outline'} 
                   size="sm" 
                   onClick={() => setShowTransparencyGrid(!showTransparencyGrid)}
@@ -3541,7 +3541,7 @@ export default function MiniAdobe() {
                 </Button>
                 <Button variant="outline" size="sm">
                   <Settings className="h-4 w-4" />
-                </Button>
+                </Button> */}
               </div>
             </div>
           </div>
